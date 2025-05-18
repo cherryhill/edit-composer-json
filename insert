@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euf -o pipefail
+
+# Check if jq is installed
+if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is required but not installed."
+    exit 1
+fi
+
+# Path to composer.json
+COMPOSER_JSON="composer.json"
+
+# Check if composer.json exists
+if [ ! -f "$COMPOSER_JSON" ]; then
+    echo "Error: $COMPOSER_JSON not found"
+    exit 1
+fi
+
+# Function to add a repository
+add_repository() {
+    local url="$1"
+    jq --arg url "$url" '.repositories += [{"type": "github", "url": $url}]' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
+    mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+}
+
+# Function to add a script
+add_script() {
+    local name="$1"
+    local command="$2"
+    jq --arg name "$name" --arg cmd "$command" '.scripts[$name] = $cmd' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
+    mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+}
+
+# Main execution
+if [ $# -gt 0 ]; then
+    case "$1" in
+        repository)
+            if [ -z "$2" ]; then
+                echo "Error: Repository URL required"
+                exit 1
+            fi
+            add_repository "https://github.com/$2"
+            ;;
+        script)
+            if [ -z "$2" ] || [ -z "$3" ]; then
+                echo "Error: Script name and command required"
+                exit 1
+            fi
+            add_script "$2" "$3"
+            ;;
+        *)
+            echo "Usage: $0 {repository|script} [args...]"
+            echo "  repository <vendor/package>  Add a GitHub repository"
+            echo "  script <name> <command>      Add a composer script"
+            exit 1
+            ;;
+    esac
+else
+    echo "Usage: $0 {repository|script} [args...]"
+    echo "  repository <vendor/package>  Add a GitHub repository"
+    echo "  script <name> <command>      Add a composer script"
+    exit 1
+fi
