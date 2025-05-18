@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-set -e -o pipefail
+set -euf -o pipefail
 
 # Check if jq is installed
 if ! command -v jq >/dev/null 2>&1; then
@@ -8,8 +8,8 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
-# Path to composer.json (default to current directory)
-: "${COMPOSER_JSON:=composer.json}"
+# Path to composer.json
+COMPOSER_JSON="composer.json"
 
 # Check if composer.json exists
 if [ ! -f "$COMPOSER_JSON" ]; then
@@ -33,32 +33,32 @@ add_script() {
 }
 
 # Main execution
-if [ -n "${COMMAND:-}" ]; then
-    case "$COMMAND" in
+if [ $# -gt 0 ]; then
+    case "$1" in
         repository)
-            if [ -z "${REPOSITORY:-}" ]; then
+            if [ -z "$2" ]; then
                 echo "Error: Repository URL required"
                 exit 1
             fi
-            add_repository "https://github.com/$REPOSITORY"
+            add_repository "https://github.com/$2"
             ;;
         script)
-            if [ -z "${SCRIPT_NAME:-}" ] || [ -z "${SCRIPT_CMD:-}" ]; then
+            if [ -z "$2" ] || [ -z "$3" ]; then
                 echo "Error: Script name and command required"
                 exit 1
             fi
-            add_script "$SCRIPT_NAME" "$SCRIPT_CMD"
+            add_script "$2" "$3"
             ;;
         *)
-            echo "Usage: COMMAND={repository|script} [REPOSITORY=... or SCRIPT_NAME=... SCRIPT_CMD=...] $0"
-            echo "  repository: Set REPOSITORY=vendor/package"
-            echo "  script: Set SCRIPT_NAME=name SCRIPT_CMD=command"
+            echo "Usage: $0 {repository|script} [args...]"
+            echo "  repository <vendor/package>  Add a GitHub repository"
+            echo "  script <name> <command>      Add a composer script"
             exit 1
             ;;
     esac
 else
-    echo "Usage: COMMAND={repository|script} [REPOSITORY=... or SCRIPT_NAME=... SCRIPT_CMD=...] $0"
-    echo "  repository: Set REPOSITORY=vendor/package"
-    echo "  script: Set SCRIPT_NAME=name SCRIPT_CMD=command"
+    echo "Usage: $0 {repository|script} [args...]"
+    echo "  repository <vendor/package>  Add a GitHub repository"
+    echo "  script <name> <command>      Add a composer script"
     exit 1
 fi
