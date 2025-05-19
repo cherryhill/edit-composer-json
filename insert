@@ -33,30 +33,15 @@ add_script() {
 }
 
 # Normalize arguments
-echo "Before normalization:"
-echo "Number of args: $#"
-echo "All args: $*"
-echo "Arg 0: $0"
-echo "Arg 1: $1"
-echo "Arg 2: $2"
-
 if [ "$0" = "repository" ] || [ "$0" = "script" ]; then
     # We're being run via bash -c, use $0 as the command
     cmd="$0"
-    shift
+    # Don't shift, keep $1 as our argument
 else
     # Normal execution, use $1 as the command
     cmd="$1"
     shift
 fi
-
-echo "After normalization:"
-echo "Command: $cmd"
-echo "Number of args: $#"
-echo "All args: $*"
-echo "Arg 0: $0"
-echo "Arg 1: $1"
-echo "Arg 2: $2"
 
 # Main execution
 case "$cmd" in
