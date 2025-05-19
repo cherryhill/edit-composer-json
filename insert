@@ -32,6 +32,9 @@ add_script() {
     mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
 }
 
+# Remove the script content from arguments
+shift
+
 # Main execution
 if [ $# -gt 0 ]; then
     case "$1" in
