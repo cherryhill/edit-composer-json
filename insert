@@ -29,7 +29,7 @@ add_repository() {
     fi
 
     # Add the repository
-    jq --arg url "$repo_url" '.repositories += [{"type": "github", "url": $url}]' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
+    jq --indent 4 --arg url "$repo_url" '.repositories += [{"type": "github", "url": $url}]' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
     mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
     echo "Added repository: $repo_url"
 }
@@ -58,7 +58,7 @@ add_script() {
         fi
 
         # Convert to array if it's not already one and add the new command
-        jq --arg name "$name" --arg cmd "$command" \
+        jq --indent 4 --arg name "$name" --arg cmd "$command" \
            '.scripts[$name] = if (.scripts[$name] | type) == "array"
                              then .scripts[$name] + [$cmd]
                              else [.scripts[$name], $cmd]
@@ -67,7 +67,7 @@ add_script() {
         echo "Added command to existing script '$name'"
     else
         # Script doesn't exist, add it
-        jq --arg name "$name" --arg cmd "$command" '.scripts[$name] = $cmd' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
+        jq --indent 4 --arg name "$name" --arg cmd "$command" '.scripts[$name] = $cmd' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
         mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
         echo "Added new script '$name'"
     fi
