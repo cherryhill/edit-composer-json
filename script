@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-set -euf -o pipefail
+#set -euf -o pipefail
 
 echo "$0"
 echo "$1"
 echo "$2"
+
+exit
