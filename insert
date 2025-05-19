@@ -32,6 +32,12 @@ add_script() {
     mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
 }
 
+# Check if we're being run via bash -c
+if ps -p $PPID -o args= | grep -q "bash -c"; then
+    # Shift arguments if run via bash -c
+    shift
+fi
+
 # Main execution
 case "$1" in
     repository)
