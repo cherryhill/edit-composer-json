@@ -2,15 +2,6 @@
 # shellcheck shell=bash
 set -e -o pipefail
 
-echo "🐞 debug"
-echo "PPID: $PPID"
-echo "Parent command: $(ps -p $PPID -o args=)"
-echo "Number of args: $#"
-echo "All args: $*"
-echo "Arg 0: $0"
-echo "Arg 1: $1"
-echo "Arg 2: $2"
-
 # Check if jq is installed
 if ! command -v jq >/dev/null 2>&1; then
     echo "Error: jq is required but not installed."
@@ -42,6 +33,13 @@ add_script() {
 }
 
 # Normalize arguments
+echo "Before normalization:"
+echo "Number of args: $#"
+echo "All args: $*"
+echo "Arg 0: $0"
+echo "Arg 1: $1"
+echo "Arg 2: $2"
+
 if [ "$0" = "repository" ] || [ "$0" = "script" ]; then
     # We're being run via bash -c, use $0 as the command
     cmd="$0"
@@ -51,6 +49,14 @@ else
     cmd="$1"
     shift
 fi
+
+echo "After normalization:"
+echo "Command: $cmd"
+echo "Number of args: $#"
+echo "All args: $*"
+echo "Arg 0: $0"
+echo "Arg 1: $1"
+echo "Arg 2: $2"
 
 # Main execution
 case "$cmd" in
