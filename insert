@@ -20,16 +20,57 @@ fi
 # Function to add a repository
 add_repository() {
     local url="$1"
-    jq --arg url "$url" '.repositories += [{"type": "github", "url": $url}]' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
+    local repo_url="https://github.com/$url"
+
+    # Check if repository already exists
+    if jq -e --arg url "$repo_url" '.repositories[] | select(.url == $url)' "$COMPOSER_JSON" >/dev/null; then
+        echo "Repository $repo_url already exists, skipping."
+        return 0
+    fi
+
+    # Add the repository
+    jq --arg url "$repo_url" '.repositories += [{"type": "github", "url": $url}]' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
     mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+    echo "Added repository: $repo_url"
 }
 
 # Function to add a script
 add_script() {
     local name="$1"
     local command="$2"
-    jq --arg name "$name" --arg cmd "$command" '.scripts[$name] = $cmd' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
-    mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+
+    # Check if script exists
+    if jq -e --arg name "$name" '.scripts[$name]' "$COMPOSER_JSON" >/dev/null; then
+        # Get existing value
+        local existing_value
+        existing_value=$(jq -r --arg name "$name" '.scripts[$name]' "$COMPOSER_JSON")
+
+        # If it's the same command, do nothing
+        if [ "$existing_value" = "$command" ]; then
+            echo "Script '$name' already exists with the same command, skipping."
+            return 0
+        fi
+
+        # If it's an array, check if command exists in array
+        if jq -e --arg name "$name" --arg cmd "$command" '.scripts[$name] | if type == "array" then .[] == $cmd else false end' "$COMPOSER_JSON" >/dev/null; then
+            echo "Script '$name' already contains this command, skipping."
+            return 0
+        fi
+
+        # Convert to array if it's not already one and add the new command
+        jq --arg name "$name" --arg cmd "$command" \
+           '.scripts[$name] = if (.scripts[$name] | type) == "array"
+                             then .scripts[$name] + [$cmd]
+                             else [.scripts[$name], $cmd]
+                             end' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
+        mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+        echo "Added command to existing script '$name'"
+    else
+        # Script doesn't exist, add it
+        jq --arg name "$name" --arg cmd "$command" '.scripts[$name] = $cmd' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp"
+        mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+        echo "Added new script '$name'"
+    fi
 }
 
 # Normalize arguments
@@ -46,7 +87,7 @@ fi
 # Main execution
 case "$cmd" in
     repository)
-        add_repository "https://github.com/$1"
+        add_repository "$1"
         ;;
     script)
         add_script "$1" "$2"
