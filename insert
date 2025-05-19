@@ -3,8 +3,13 @@
 set -e -o pipefail
 
 echo "🐞 debug"
-echo "$0"
-echo "$1"
+echo "PPID: $PPID"
+echo "Parent command: $(ps -p $PPID -o args=)"
+echo "Number of args: $#"
+echo "All args: $*"
+echo "Arg 0: $0"
+echo "Arg 1: $1"
+echo "Arg 2: $2"
 
 # Check if jq is installed
 if ! command -v jq >/dev/null 2>&1; then
@@ -36,19 +41,24 @@ add_script() {
     mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
 }
 
-# Check if we're being run via bash -c
-if ps -p $PPID -o args= | grep -q "bash -c"; then
-    # Shift arguments if run via bash -c
+# Normalize arguments
+if [ "$0" = "repository" ] || [ "$0" = "script" ]; then
+    # We're being run via bash -c, use $0 as the command
+    cmd="$0"
+    shift
+else
+    # Normal execution, use $1 as the command
+    cmd="$1"
     shift
 fi
 
 # Main execution
-case "$1" in
+case "$cmd" in
     repository)
-        add_repository "https://github.com/$2"
+        add_repository "https://github.com/$1"
         ;;
     script)
-        add_script "$2" "$3"
+        add_script "$1" "$2"
         ;;
     *)
         echo "Usage: $0 {repository|script} [args...]"
