@@ -32,36 +32,33 @@ add_script() {
     mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
 }
 
-# Remove the script content from arguments
-shift
-
 # Main execution
-if [ $# -gt 0 ]; then
-    case "$1" in
+if [ -n "${COMMAND:-}" ]; then
+    case "$COMMAND" in
         repository)
-            if [ -z "${2:-}" ]; then
+            if [ -z "${REPOSITORY:-}" ]; then
                 echo "Error: Repository URL required"
                 exit 1
             fi
-            add_repository "https://github.com/$2"
+            add_repository "https://github.com/$REPOSITORY"
             ;;
         script)
-            if [ -z "${2:-}" ] || [ -z "${3:-}" ]; then
+            if [ -z "${SCRIPT_NAME:-}" ] || [ -z "${SCRIPT_CMD:-}" ]; then
                 echo "Error: Script name and command required"
                 exit 1
             fi
-            add_script "$2" "$3"
+            add_script "$SCRIPT_NAME" "$SCRIPT_CMD"
             ;;
         *)
-            echo "Usage: $0 {repository|script} [args...]"
-            echo "  repository <vendor/package>  Add a GitHub repository"
-            echo "  script <name> <command>      Add a composer script"
+            echo "Usage: COMMAND={repository|script} [REPOSITORY=... or SCRIPT_NAME=... SCRIPT_CMD=...] $0"
+            echo "  repository: Set REPOSITORY=vendor/package"
+            echo "  script: Set SCRIPT_NAME=name SCRIPT_CMD=command"
             exit 1
             ;;
     esac
 else
-    echo "Usage: $0 {repository|script} [args...]"
-    echo "  repository <vendor/package>  Add a GitHub repository"
-    echo "  script <name> <command>      Add a composer script"
+    echo "Usage: COMMAND={repository|script} [REPOSITORY=... or SCRIPT_NAME=... SCRIPT_CMD=...] $0"
+    echo "  repository: Set REPOSITORY=vendor/package"
+    echo "  script: Set SCRIPT_NAME=name SCRIPT_CMD=command"
     exit 1
 fi
