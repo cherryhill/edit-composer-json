@@ -2,6 +2,10 @@
 # shellcheck shell=bash
 set -e -o pipefail
 
+echo "🐞 debug"
+echo "$0"
+echo "$1"
+
 # Check if jq is installed
 if ! command -v jq >/dev/null 2>&1; then
     echo "Error: jq is required but not installed."
