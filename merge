@@ -1,0 +1,306 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -e -o pipefail
+
+# Default composer.json path
+COMPOSER_JSON="composer.json"
+
+# Parse command line arguments
+while getopts "f:" opt; do
+    case $opt in
+        f)
+            COMPOSER_JSON="$OPTARG"
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+        :)
+            echo "Option -$OPTARG requires an argument." >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Shift the parsed options out of the argument list
+shift $((OPTIND-1))
+
+# Function to detect available JSON editing tools
+detect_json_tool() {
+    if command -v jq >/dev/null 2>&1; then
+        echo "jq"
+    elif command -v python3 >/dev/null 2>&1; then
+        echo "python3"
+    elif command -v python >/dev/null 2>&1; then
+        echo "python"
+    else
+        echo "none"
+    fi
+}
+
+# Function to merge JSON using jq
+merge_json_jq() {
+    local source_file="$1"
+    local target_file="$2"
+    local merge_path="$3"
+
+    # Handle special cases for paths with hyphens
+    if [ "$merge_path" = "require-dev" ] || [ "$merge_path" = "autoload-dev" ]; then
+        jq --indent 4 --slurpfile source "$source_file" \
+           ".[\"$merge_path\"] = (.[\"$merge_path\"] // {}) + (\$source[0].extra[\"root-package\"][\"$merge_path\"] // {})" \
+           "$target_file" > "$target_file.tmp"
+    else
+        jq --indent 4 --slurpfile source "$source_file" \
+           ".$merge_path = (.[$merge_path] // {}) + (\$source[0].extra[\"root-package\"].$merge_path // {})" \
+           "$target_file" > "$target_file.tmp"
+    fi
+    mv "$target_file.tmp" "$target_file"
+}
+
+# Function to merge JSON using Python
+merge_json_python() {
+    local source_file="$1"
+    local target_file="$2"
+    local merge_path="$3"
+
+    python3 -c "
+import json
+import sys
+
+try:
+    with open('$source_file', 'r') as f:
+        source_data = json.load(f)
+
+    with open('$target_file', 'r') as f:
+        target_data = json.load(f)
+
+    # Navigate to the merge path in source
+    source_sections = source_data.get('extra', {}).get('root-package', {})
+    if '$merge_path' in source_sections:
+        source_section = source_sections['$merge_path']
+
+        # Initialize target section if it doesn't exist
+        if '$merge_path' not in target_data:
+            if '$merge_path' == 'repositories':
+                target_data['$merge_path'] = []
+            else:
+                target_data['$merge_path'] = {}
+
+        # Merge the sections
+        if '$merge_path' == 'repositories':
+            # repositories is an array
+            if isinstance(target_data['$merge_path'], list) and isinstance(source_section, list):
+                target_data['$merge_path'].extend(source_section)
+        else:
+            # Other sections are objects
+            if isinstance(target_data['$merge_path'], dict) and isinstance(source_section, dict):
+                target_data['$merge_path'].update(source_section)
+
+    # Write back to file
+    with open('$target_file', 'w') as f:
+        json.dump(target_data, f, indent=4)
+
+except Exception as e:
+    print(f'Error merging JSON: {e}', file=sys.stderr)
+    sys.exit(1)
+"
+}
+
+# Function to check if JSON path exists using jq
+check_json_path_jq() {
+    local file="$1"
+    local path="$2"
+    jq -e "$path" "$file" >/dev/null 2>&1
+}
+
+# Function to check if JSON path exists using Python
+check_json_path_python() {
+    local file="$1"
+    local path="$2"
+
+    python3 -c "
+import json
+import sys
+
+try:
+    with open('$file', 'r') as f:
+        data = json.load(f)
+
+    # Navigate to the path
+    current = data
+    for key in '$path'.split('.'):
+        if key in current:
+            current = current[key]
+        else:
+            sys.exit(1)
+
+    sys.exit(0)
+except:
+    sys.exit(1)
+" >/dev/null 2>&1
+}
+
+# Detect available JSON tool
+JSON_TOOL=$(detect_json_tool)
+
+if [ "$JSON_TOOL" = "none" ]; then
+    echo "Error: Neither jq nor Python is available. Please install jq or ensure Python is available."
+    exit 1
+fi
+
+echo "Using $JSON_TOOL for JSON operations"
+
+# Check if composer.json exists
+if [ ! -f "$COMPOSER_JSON" ]; then
+    echo "Error: $COMPOSER_JSON not found"
+    exit 1
+fi
+
+
+
+# Function to merge root-package configuration from a GitHub repository
+merge_root_package() {
+    local repo="$1"
+    local repo_url="https://github.com/$repo"
+    local raw_url="https://raw.githubusercontent.com/$repo/main/composer.json"
+
+    echo "Fetching composer.json from $repo_url..."
+
+    # Fetch the remote composer.json file
+    local temp_file
+    temp_file=$(mktemp)
+
+    if ! curl -fsSL "$raw_url" > "$temp_file" 2>/dev/null; then
+        echo "Error: Could not fetch composer.json from $raw_url"
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    # Check if the file has an extra.root-package section
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if ! check_json_path_jq "$temp_file" '.extra["root-package"]'; then
+            echo "No extra.root-package section found in $repo_url"
+            rm -f "$temp_file"
+            return 0
+        fi
+    else
+        if ! check_json_path_python "$temp_file" 'extra.root-package'; then
+            echo "No extra.root-package section found in $repo_url"
+            rm -f "$temp_file"
+            return 0
+        fi
+    fi
+
+    echo "Found extra.root-package section, merging configuration..."
+
+    # Merge repositories
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if check_json_path_jq "$temp_file" '.extra["root-package"].repositories'; then
+            echo "Merging repositories..."
+            merge_json_jq "$temp_file" "$COMPOSER_JSON" "repositories"
+        fi
+    else
+        if check_json_path_python "$temp_file" 'extra.root-package.repositories'; then
+            echo "Merging repositories..."
+            merge_json_python "$temp_file" "$COMPOSER_JSON" "repositories"
+        fi
+    fi
+
+    # Merge scripts
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if check_json_path_jq "$temp_file" '.extra["root-package"].scripts'; then
+            echo "Merging scripts..."
+            merge_json_jq "$temp_file" "$COMPOSER_JSON" "scripts"
+        fi
+    else
+        if check_json_path_python "$temp_file" 'extra.root-package.scripts'; then
+            echo "Merging scripts..."
+            merge_json_python "$temp_file" "$COMPOSER_JSON" "scripts"
+        fi
+    fi
+
+    # Merge require
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if check_json_path_jq "$temp_file" '.extra["root-package"].require'; then
+            echo "Merging require..."
+            merge_json_jq "$temp_file" "$COMPOSER_JSON" "require"
+        fi
+    else
+        if check_json_path_python "$temp_file" 'extra.root-package.require'; then
+            echo "Merging require..."
+            merge_json_python "$temp_file" "$COMPOSER_JSON" "require"
+        fi
+    fi
+
+    # Merge require-dev
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if check_json_path_jq "$temp_file" '.extra["root-package"]["require-dev"]'; then
+            echo "Merging require-dev..."
+            merge_json_jq "$temp_file" "$COMPOSER_JSON" "require-dev"
+        fi
+    else
+        if check_json_path_python "$temp_file" 'extra.root-package.require-dev'; then
+            echo "Merging require-dev..."
+            merge_json_python "$temp_file" "$COMPOSER_JSON" "require-dev"
+        fi
+    fi
+
+    # Merge autoload
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if check_json_path_jq "$temp_file" '.extra["root-package"].autoload'; then
+            echo "Merging autoload..."
+            merge_json_jq "$temp_file" "$COMPOSER_JSON" "autoload"
+        fi
+    else
+        if check_json_path_python "$temp_file" 'extra.root-package.autoload'; then
+            echo "Merging autoload..."
+            merge_json_python "$temp_file" "$COMPOSER_JSON" "autoload"
+        fi
+    fi
+
+    # Merge autoload-dev
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if check_json_path_jq "$temp_file" '.extra["root-package"]["autoload-dev"]'; then
+            echo "Merging autoload-dev..."
+            merge_json_jq "$temp_file" "$COMPOSER_JSON" "autoload-dev"
+        fi
+    else
+        if check_json_path_python "$temp_file" 'extra.root-package.autoload-dev'; then
+            echo "Merging autoload-dev..."
+            merge_json_python "$temp_file" "$COMPOSER_JSON" "autoload-dev"
+        fi
+    fi
+
+    # Merge config
+    if [ "$JSON_TOOL" = "jq" ]; then
+        if check_json_path_jq "$temp_file" '.extra["root-package"].config'; then
+            echo "Merging config..."
+            merge_json_jq "$temp_file" "$COMPOSER_JSON" "config"
+        fi
+    else
+        if check_json_path_python "$temp_file" 'extra.root-package.config'; then
+            echo "Merging config..."
+            merge_json_python "$temp_file" "$COMPOSER_JSON" "config"
+        fi
+    fi
+
+    rm -f "$temp_file"
+    echo "Successfully merged root-package configuration from $repo_url"
+}
+
+# Main execution
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 [-f composer.json] <vendor/package>"
+    echo "  -f <file>                    Specify composer.json file location (default: ./composer.json)"
+    echo "  <vendor/package>             Merge root-package configuration from a GitHub repository"
+    exit 1
+fi
+
+# Check if the argument looks like a vendor/package (contains a slash)
+if [[ "$1" == */* ]]; then
+    merge_root_package "$1"
+else
+    echo "Error: Expected vendor/package format (e.g., 'cherryhill/example-custom-project')"
+    echo "Usage: $0 [-f composer.json] <vendor/package>"
+    exit 1
+fi
