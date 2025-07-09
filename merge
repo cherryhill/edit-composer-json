@@ -161,10 +161,11 @@ fi
 # Function to merge root-package configuration from a GitHub repository
 merge_root_package() {
     local repo="$1"
+    local ref="$2"
     local repo_url="https://github.com/$repo"
-    local raw_url="https://raw.githubusercontent.com/$repo/main/composer.json"
+    local raw_url="https://raw.githubusercontent.com/$repo/${ref:-main}/composer.json"
 
-    echo "Fetching composer.json from $repo_url..."
+    echo "Fetching composer.json from $repo_url (ref: $ref)..."
 
     # Fetch the remote composer.json file
     local temp_file
@@ -290,17 +291,20 @@ merge_root_package() {
 
 # Main execution
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 [-f composer.json] <vendor/package>"
+    echo "Usage: $0 [-f composer.json] <vendor/package[@ref]>"
     echo "  -f <file>                    Specify composer.json file location (default: ./composer.json)"
-    echo "  <vendor/package>             Merge root-package configuration from a GitHub repository"
+    echo "  <vendor/package[@ref]>       Merge root-package configuration from a GitHub repository (optionally specify branch/tag/commit with @ref, default: main)"
     exit 1
 fi
 
-# Check if the argument looks like a vendor/package (contains a slash)
-if [[ "$1" == */* ]]; then
-    merge_root_package "$1"
+# Parse repo and ref (branch/tag/commit)
+REPO_ARG="$1"
+if [[ "$REPO_ARG" == *@* ]]; then
+    REPO_NAME="${REPO_ARG%@*}"
+    REPO_REF="${REPO_ARG#*@}"
 else
-    echo "Error: Expected vendor/package format (e.g., 'cherryhill/example-custom-project')"
-    echo "Usage: $0 [-f composer.json] <vendor/package>"
-    exit 1
+    REPO_NAME="$REPO_ARG"
+    REPO_REF="main"
 fi
+
+merge_root_package "$REPO_NAME" "$REPO_REF"
