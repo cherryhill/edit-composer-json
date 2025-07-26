@@ -34,6 +34,9 @@ fi
 
 REPO_URL="https://github.com/$REPO"
 
+echo "🐞 DEBUG: COMPOSER_JSON=$COMPOSER_JSON"
+echo "🐞 DEBUG: pwd=$(pwd)"
+
 if [ ! -f "$COMPOSER_JSON" ]; then
     echo "Error: $COMPOSER_JSON not found" >&2
     exit 1
