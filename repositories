@@ -18,6 +18,8 @@ fi
 
 COMPOSER_JSON="composer.json"
 
+echo "🐞 DEBUG: 1=$1"
+
 while getopts "f:" opt; do
     case $opt in
         f) COMPOSER_JSON="$OPTARG" ;;
