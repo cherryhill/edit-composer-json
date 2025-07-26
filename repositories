@@ -21,12 +21,15 @@ COMPOSER_JSON="composer.json"
 echo "🐞 DEBUG: 1=$1"
 
 while getopts "f:" opt; do
+    echo "🐞 DEBUG: opt=$opt"
     case $opt in
         f) COMPOSER_JSON="$OPTARG" ;;
         *) echo "Usage: $0 [-f composer.json] vendor/package-name" >&2; exit 1 ;;
     esac
 done
 shift $((OPTIND-1))
+
+echo "🐞 DEBUG: 1=$1"
 
 REPO="$1"
 if [ -z "$REPO" ]; then
