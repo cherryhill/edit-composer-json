@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -e
+
+# Check if jq is installed
+if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is required but not installed." >&2
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "Install jq on macOS with: brew install jq" >&2
+        echo "See https://jqlang.org/download/ for more options" >&2
+    elif [[ "$OSTYPE" == "linux"* ]]; then
+        echo "Install jq on Ubuntu with: sudo apt-get install jq" >&2
+        echo "See https://jqlang.org/download/ for more options" >&2
+    else
+        echo "See https://jqlang.org/download/ for installation options" >&2
+    fi
+    exit 1
+fi
+
+COMPOSER_JSON="composer.json"
+
+while getopts "f:" opt; do
+    case $opt in
+        f) COMPOSER_JSON="$OPTARG" ;;
+        *) echo "Usage: $0 [-f composer.json] vendor/package-name" >&2; exit 1 ;;
+    esac
+done
+shift $((OPTIND-1))
+
+REPO="$1"
+if [ -z "$REPO" ]; then
+    echo "Usage: $0 [-f composer.json] vendor/package-name" >&2
+    exit 1
+fi
+
+REPO_URL="https://github.com/$REPO"
+
+if [ ! -f "$COMPOSER_JSON" ]; then
+    echo "Error: $COMPOSER_JSON not found" >&2
+    exit 1
+fi
+
+# Ensure repositories array exists
+jq 'if .repositories == null then .repositories = [] else . end' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp" && mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+
+# Check if repository already exists
+if jq -e --arg url "$REPO_URL" '.repositories[]? | select(.url == $url)' "$COMPOSER_JSON" >/dev/null; then
+    echo "Repository $REPO_URL already exists, skipping."
+    exit 0
+fi
+
+# Add the repository
+jq --indent 4 --arg url "$REPO_URL" '.repositories += [{"type": "github", "url": $url}]' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp" && mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+echo "Added repository: $REPO_URL"

@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -e
+
+# Check if jq is installed
+if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is required but not installed." >&2
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "Install jq on macOS with: brew install jq" >&2
+        echo "See https://jqlang.org/download/ for more options" >&2
+    elif [[ "$OSTYPE" == "linux"* ]]; then
+        echo "Install jq on Ubuntu with: sudo apt-get install jq" >&2
+        echo "See https://jqlang.org/download/ for more options" >&2
+    else
+        echo "See https://jqlang.org/download/ for installation options" >&2
+    fi
+    exit 1
+fi
+
+COMPOSER_JSON="composer.json"
+SCRIPT_PAIR=""
+
+while getopts "f:s:" opt; do
+    case $opt in
+        f) COMPOSER_JSON="$OPTARG" ;;
+        s) SCRIPT_PAIR="$OPTARG" ;;
+        *) echo "Usage: $0 [-f composer.json] -s script-name:command" >&2; exit 1 ;;
+    esac
+done
+shift $((OPTIND-1))
+
+if [ -z "$SCRIPT_PAIR" ]; then
+    echo "Usage: $0 [-f composer.json] -s script-name:command" >&2
+    exit 1
+fi
+
+SCRIPT_NAME="${SCRIPT_PAIR%%:*}"
+COMMAND="${SCRIPT_PAIR#*:}"
+
+if [ -z "$SCRIPT_NAME" ] || [ -z "$COMMAND" ]; then
+    echo "Error: script-name or command missing in -s option" >&2
+    exit 1
+fi
+
+if [ ! -f "$COMPOSER_JSON" ]; then
+    echo "Error: $COMPOSER_JSON not found" >&2
+    exit 1
+fi
+
+# Ensure scripts object exists
+jq 'if .scripts == null then .scripts = {} else . end' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp" && mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+
+# Check if script exists and matches command
+EXISTING=$(jq -r --arg name "$SCRIPT_NAME" '.scripts[$name]' "$COMPOSER_JSON")
+if [ "$EXISTING" = "$COMMAND" ]; then
+    echo "Script '$SCRIPT_NAME' already exists with the same command, skipping."
+    exit 0
+fi
+
+# If it's an array, check if command exists in array
+if jq -e --arg name "$SCRIPT_NAME" --arg cmd "$COMMAND" '.scripts[$name] | type == "array" and index($cmd) != null' "$COMPOSER_JSON" >/dev/null; then
+    echo "Script '$SCRIPT_NAME' already contains this command, skipping."
+    exit 0
+fi
+
+# Add or update the script
+jq --indent 4 --arg name "$SCRIPT_NAME" --arg cmd "$COMMAND" '
+    .scripts[$name] =
+        if (.scripts[$name] | type) == "array" then
+            (.scripts[$name] + [$cmd] | unique)
+        elif (.scripts[$name] == null) then
+            $cmd
+        else
+            [ .scripts[$name], $cmd ] | unique
+        end
+' "$COMPOSER_JSON" > "$COMPOSER_JSON.tmp" && mv "$COMPOSER_JSON.tmp" "$COMPOSER_JSON"
+echo "Added/updated script '$SCRIPT_NAME'"
