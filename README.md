@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/cherryhill/edit-composer-json/3.x/r
 Or with a custom composer.json path:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/cherryhill/edit-composer-json/3.x/repositories | bash -s -f /path/to/composer.json vendor/package-name
+curl -fsSL https://raw.githubusercontent.com/cherryhill/edit-composer-json/3.x/repositories | bash -s -- -f /path/to/composer.json vendor/package-name
 ```
 
 This will add:
@@ -40,13 +40,13 @@ This will add:
 ### Add a script
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/cherryhill/edit-composer-json/3.x/scripts | bash -s -s post-update-cmd:./vendor/cherryhill/example-custom-project/executable-command
+curl -fsSL https://raw.githubusercontent.com/cherryhill/edit-composer-json/3.x/scripts | bash -s -- -s post-update-cmd:./vendor/cherryhill/example-custom-project/executable-command
 ```
 
 Or with a custom composer.json path:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/cherryhill/edit-composer-json/3.x/scripts | bash -s -f /path/to/composer.json -s post-update-cmd:./vendor/cherryhill/example-custom-project/executable-command
+curl -fsSL https://raw.githubusercontent.com/cherryhill/edit-composer-json/3.x/scripts | bash -s -- -f /path/to/composer.json -s post-update-cmd:./vendor/cherryhill/example-custom-project/executable-command
 ```
 
 This will add:
